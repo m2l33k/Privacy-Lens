@@ -97,6 +97,39 @@
     }
     .__pl_spark__:nth-child(odd)  { width:3px!important;height:6px!important;background:linear-gradient(to top,#ff4500,#ffcc00)!important; }
     .__pl_spark__:nth-child(even) { width:2px!important;height:4px!important;background:linear-gradient(to top,#ff6b00,#ff4500)!important; }
+
+    /* ── Police ── */
+    @keyframes __pl_police__ {
+      0%,46%  { box-shadow:0 0 10px #FF1744,0 0 28px #FF1744,0 0 60px rgba(255,23,68,.55),0 0 110px rgba(255,23,68,.2); border-color:#FF1744; }
+      47%,49% { box-shadow:none; border-color:transparent; }
+      50%,96% { box-shadow:0 0 10px #2979FF,0 0 28px #2979FF,0 0 60px rgba(41,121,255,.55),0 0 110px rgba(41,121,255,.2); border-color:#2979FF; }
+      97%,99% { box-shadow:none; border-color:transparent; }
+      100%    { box-shadow:0 0 10px #FF1744,0 0 28px #FF1744,0 0 60px rgba(255,23,68,.55),0 0 110px rgba(255,23,68,.2); border-color:#FF1744; }
+    }
+    @keyframes __pl_police_bg__ {
+      0%,46%  { background:rgba(140,0,20,.13) !important; }
+      47%,49% { background:rgba(0,0,0,.25)    !important; }
+      50%,96% { background:rgba(10,35,160,.13) !important; }
+      97%,99% { background:rgba(0,0,0,.25)    !important; }
+      100%    { background:rgba(140,0,20,.13) !important; }
+    }
+    .__pl_border__.pl-police {
+      border: 2px solid #FF1744 !important;
+      animation: __pl_police__ .55s step-end infinite !important;
+    }
+    .__pl_overlay_police__ {
+      animation: __pl_police_bg__ .55s step-end infinite !important;
+    }
+
+    /* ── Flashlight ── */
+    @keyframes __pl_flashlight__ {
+      0%,100% { box-shadow:0 0 18px rgba(255,242,200,.55),0 0 40px rgba(255,228,160,.35),0 0 75px rgba(255,210,120,.18); border-color:rgba(255,242,200,.85); }
+      50%     { box-shadow:0 0 24px rgba(255,248,220,.75),0 0 55px rgba(255,235,175,.5), 0 0 95px rgba(255,215,130,.25); border-color:rgba(255,252,235,1); }
+    }
+    .__pl_border__.pl-flashlight {
+      border: 1.5px solid rgba(255,242,200,.85) !important;
+      animation: __pl_flashlight__ 2.5s ease-in-out infinite !important;
+    }
   `;
 
   // ─── Build DOM ────────────────────────────────────────────────────────────────
@@ -117,6 +150,7 @@
     // For circle: 1 radial-gradient with transparent centre.
     // Only --lx/--ly/--lw/--lh custom props update each frame — no string rebuild.
     overlayEl = document.createElement('div');
+    overlayEl.id = '__pl_overlay__';
     overlayEl.style.cssText = `
       position: fixed !important;
       inset: 0 !important;
@@ -267,10 +301,12 @@
       }
     }
 
-    // Update blur filter
-    const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.88)`;
-    overlayEl.style.backdropFilter       = blurFilter;
-    overlayEl.style.webkitBackdropFilter = blurFilter;
+    // Update blur filter — skipped for effects that own their own overlay style
+    if (state.effect !== 'flashlight' && state.effect !== 'police') {
+      const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.88)`;
+      overlayEl.style.backdropFilter       = blurFilter;
+      overlayEl.style.webkitBackdropFilter = blurFilter;
+    }
 
     // Update lens border
     Object.assign(borderEl.style, {
@@ -522,9 +558,32 @@
   function applyEffect(effect) {
     state.effect = effect;
     if (!borderEl) return;
+
     borderEl.className = `__pl_border__ pl-${effect}`;
-    // Sparks only for fire
     if (sparksEl) sparksEl.style.display = effect === 'fire' ? 'block' : 'none';
+
+    if (!overlayEl) return;
+
+    if (effect === 'flashlight') {
+      // Pure black curtain — no blur, just a solid dark mask with a torch hole
+      overlayEl.style.backdropFilter       = 'none';
+      overlayEl.style.webkitBackdropFilter = 'none';
+      overlayEl.style.background           = 'rgba(0,0,0,0.94)';
+      overlayEl.classList.remove('__pl_overlay_police__');
+    } else if (effect === 'police') {
+      // Keep blur but add the red/blue background pulse class
+      const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.55)`;
+      overlayEl.style.backdropFilter       = blurFilter;
+      overlayEl.style.webkitBackdropFilter = blurFilter;
+      overlayEl.classList.add('__pl_overlay_police__');
+    } else {
+      // Normal frosted blur
+      const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.88)`;
+      overlayEl.style.backdropFilter       = blurFilter;
+      overlayEl.style.webkitBackdropFilter = blurFilter;
+      overlayEl.style.background           = 'rgba(8,8,14,.2)';
+      overlayEl.classList.remove('__pl_overlay_police__');
+    }
   }
 
   // ─── Blur ─────────────────────────────────────────────────────────────────────

@@ -34,11 +34,13 @@ const SHAPES = [
 ];
 
 const EFFECTS = [
-  { id: 'default', label: 'Cyan',  color: '#00D1FF' },
-  { id: 'fire',    label: 'Fire',  color: '#ff6b00' },
-  { id: 'neon',    label: 'Neon',  color: '#39ff14' },
-  { id: 'ice',     label: 'Ice',   color: '#87ceeb' },
-  { id: 'ghost',   label: 'Ghost', color: 'rgba(255,255,255,0.3)' },
+  { id: 'default',    label: 'Cyan',       color: '#00D1FF' },
+  { id: 'fire',       label: 'Fire',       color: '#ff6b00' },
+  { id: 'neon',       label: 'Neon',       color: '#39ff14' },
+  { id: 'ice',        label: 'Ice',        color: '#87ceeb' },
+  { id: 'ghost',      label: 'Ghost',      color: 'rgba(255,255,255,0.3)' },
+  { id: 'police',     label: 'Police',     color: 'police' },
+  { id: 'flashlight', label: 'Torch',      color: '#FFF5CC' },
 ];
 
 // ─── Messaging ────────────────────────────────────────────────────────────────
@@ -271,7 +273,10 @@ export default function App() {
               onClick={() => handleEffect(ef.id)}
               title={ef.label}
             >
-              <span className="effect-dot" style={{ background: ef.color, boxShadow: effect === ef.id ? `0 0 6px ${ef.color}` : 'none' }} />
+              {ef.color === 'police'
+                ? <span className="effect-dot effect-dot-police" style={{ boxShadow: effect === ef.id ? '0 0 6px #FF1744' : 'none' }} />
+                : <span className="effect-dot" style={{ background: ef.color, boxShadow: effect === ef.id ? `0 0 6px ${ef.color}` : 'none' }} />
+              }
               <span className="effect-label">{ef.label}</span>
             </button>
           ))}

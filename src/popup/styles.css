@@ -194,7 +194,7 @@ body {
 
 /* ─── Effects Row ──────────────────────────────────────────────────────────── */
 
-.effects-row { display: flex; gap: 5px; }
+.effects-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 
 .effect-btn {
   flex: 1;
@@ -223,6 +223,16 @@ body {
 
 .effect-label { font-size: 9px; color: var(--text-muted); }
 .effect-btn.active .effect-label { color: var(--text); }
+
+/* Police split-color dot */
+.effect-dot-police {
+  background: linear-gradient(90deg, #FF1744 50%, #2979FF 50%);
+}
+
+/* Flashlight warm glow hint on active */
+.effect-btn.active .effect-dot[style*="FFF5CC"] {
+  box-shadow: 0 0 8px rgba(255,245,200,.9) !important;
+}
 
 /* ─── Blur Slider ──────────────────────────────────────────────────────────── */
 
