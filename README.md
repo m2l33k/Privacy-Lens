@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="src/icons/logo.png" alt="Privacy Lens" width="260" />
+
 # Privacy Lens
 
 **A dynamic privacy shield for Chrome — work on sensitive content in public without exposing your screen.**
