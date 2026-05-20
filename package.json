@@ -1,11 +1,28 @@
 {
   "name": "privacy-lens",
   "version": "1.0.0",
-  "description": "A stealth-mode browser extension for working on sensitive content in public",
+  "description": "A dynamic privacy shield for Chrome — blur your screen in public with a clear lens that follows your cursor.",
+  "keywords": [
+    "chrome-extension",
+    "privacy",
+    "productivity",
+    "blur",
+    "screen-guard",
+    "manifest-v3"
+  ],
+  "homepage": "https://github.com/m2l33k/Privacy-Lens#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/m2l33k/Privacy-Lens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/m2l33k/Privacy-Lens/issues"
+  },
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
-    "build:dev": "webpack --mode development"
+    "build:dev": "webpack --mode development",
+    "version": "node scripts/bump-version.js && git add manifest.json"
   },
   "dependencies": {
     "react": "^18.2.0",

@@ -6,6 +6,7 @@
 
 **A dynamic privacy shield for Chrome — work on sensitive content in public without exposing your screen.**
 
+[![Build](https://github.com/m2l33k/Privacy-Lens/actions/workflows/build.yml/badge.svg)](https://github.com/m2l33k/Privacy-Lens/actions/workflows/build.yml)
 [![Version](https://img.shields.io/badge/version-1.0.0-00D1FF?style=flat-square)](./manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-blue?style=flat-square)](./manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#)
@@ -17,6 +18,16 @@
 ## How It Works
 
 Activating **Privacy Mode** blurs the entire browser tab with a frosted-glass overlay. A clear **Lens** follows your cursor, revealing only what you're focused on. Everything outside stays hidden. Panic-toggle it instantly with a hotkey the moment someone looks your way.
+
+---
+
+## Screenshots
+
+> Add GIFs or images here once available — drag and drop into the GitHub editor.
+
+| Lens active | Effects grid | Stats page |
+|:-----------:|:------------:|:----------:|
+| _screenshot_ | _screenshot_ | _screenshot_ |
 
 ---
 
