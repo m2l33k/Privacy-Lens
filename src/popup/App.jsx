@@ -34,13 +34,14 @@ const SHAPES = [
 ];
 
 const EFFECTS = [
-  { id: 'default',    label: 'Cyan',       color: '#00D1FF' },
-  { id: 'fire',       label: 'Fire',       color: '#ff6b00' },
-  { id: 'neon',       label: 'Neon',       color: '#39ff14' },
-  { id: 'ice',        label: 'Ice',        color: '#87ceeb' },
-  { id: 'ghost',      label: 'Ghost',      color: 'rgba(255,255,255,0.3)' },
-  { id: 'police',     label: 'Police',     color: 'police' },
-  { id: 'flashlight', label: 'Torch',      color: '#FFF5CC' },
+  { id: 'default',    label: 'Cyan',   color: '#00D1FF' },
+  { id: 'fire',       label: 'Fire',   color: '#ff6b00' },
+  { id: 'neon',       label: 'Neon',   color: '#39ff14' },
+  { id: 'ice',        label: 'Ice',    color: '#87ceeb' },
+  { id: 'ghost',      label: 'Ghost',  color: 'rgba(255,255,255,0.3)' },
+  { id: 'police',     label: 'Police', color: 'police' },
+  { id: 'flashlight', label: 'Torch',  color: '#FFF5CC' },
+  { id: 'matrix',     label: 'Matrix', color: '#00ff41' },
 ];
 
 // ─── Messaging ────────────────────────────────────────────────────────────────
