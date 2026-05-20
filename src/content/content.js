@@ -1,8 +1,9 @@
 (() => {
   'use strict';
 
-  const SVG_NS  = 'http://www.w3.org/2000/svg';
-  const MASK_ID = '__pl_mask__';
+  // Rect mask: 4 opaque gradient panels leave the lens area transparent.
+  // Circle mask: radial-gradient with transparent centre.
+  // Both use CSS custom properties so only 4 setProperty() calls per frame.
 
   // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -26,8 +27,7 @@
 
   // ─── DOM Refs ─────────────────────────────────────────────────────────────────
 
-  let root, svgEl, maskBgEl, maskHoleEl, overlayEl, borderEl,
-      sparksEl, clickBlockerEl, dragOverlayEl, styleEl;
+  let root, overlayEl, borderEl, sparksEl, clickBlockerEl, dragOverlayEl, styleEl;
 
   // ─── Effect CSS ───────────────────────────────────────────────────────────────
 
@@ -111,32 +111,11 @@
     root.id = '__pl_root__';
     root.setAttribute('data-privacy-lens', 'true');
 
-    // ── SVG mask definition (zero-size, just defines the <mask>) ──
-    svgEl = document.createElementNS(SVG_NS, 'svg');
-    Object.assign(svgEl.style, {
-      position: 'fixed', width: '0', height: '0',
-      overflow: 'hidden', pointerEvents: 'none', top: '0', left: '0',
-    });
-    svgEl.setAttribute('aria-hidden', 'true');
-
-    const defs = document.createElementNS(SVG_NS, 'defs');
-    const mask = document.createElementNS(SVG_NS, 'mask');
-    mask.id = MASK_ID;
-    mask.setAttribute('maskUnits', 'userSpaceOnUse');
-
-    maskBgEl = document.createElementNS(SVG_NS, 'rect');
-    maskBgEl.setAttribute('fill', 'white');
-
-    // Default hole shape is rect; swapped to ellipse for circle mode
-    maskHoleEl = document.createElementNS(SVG_NS, 'rect');
-    maskHoleEl.setAttribute('fill', 'black');
-
-    mask.appendChild(maskBgEl);
-    mask.appendChild(maskHoleEl);
-    defs.appendChild(mask);
-    svgEl.appendChild(defs);
-
-    // ── Single full-screen blur overlay (mask punches the lens hole) ──
+    // ── Single full-screen blur overlay ──
+    // CSS mask-image punches a transparent hole where the lens is.
+    // For rect: 4 opaque linear-gradient panels (union via mask-composite:add).
+    // For circle: 1 radial-gradient with transparent centre.
+    // Only --lx/--ly/--lw/--lh custom props update each frame — no string rebuild.
     overlayEl = document.createElement('div');
     overlayEl.style.cssText = `
       position: fixed !important;
@@ -144,9 +123,12 @@
       z-index: 2147483638 !important;
       background: rgba(8,8,14,.2) !important;
       pointer-events: none !important;
-      mask: url(#${MASK_ID}) !important;
-      -webkit-mask: url(#${MASK_ID}) !important;
     `;
+    // CSS custom props will be set by applyGeometry()
+    overlayEl.style.setProperty('--lx', '0px');
+    overlayEl.style.setProperty('--ly', '0px');
+    overlayEl.style.setProperty('--lw', '300px');
+    overlayEl.style.setProperty('--lh', '200px');
 
     // ── Lens border ──
     borderEl = document.createElement('div');
@@ -196,7 +178,7 @@
       cursor: crosshair !important;
     `;
 
-    [svgEl, overlayEl, borderEl, clickBlockerEl, dragOverlayEl].forEach(n => root.appendChild(n));
+    [overlayEl, borderEl, clickBlockerEl, dragOverlayEl].forEach(n => root.appendChild(n));
     document.documentElement.appendChild(root);
 
     // Blocker events
@@ -222,36 +204,75 @@
     return { lx, ly, lw: state.lensW, lh: state.lensH };
   }
 
+  // Rect mask strings — static, reference CSS custom props on the overlay element.
+  const RECT_MASK_IMAGE = [
+    'linear-gradient(black,black)',
+    'linear-gradient(black,black)',
+    'linear-gradient(black,black)',
+    'linear-gradient(black,black)',
+  ].join(',');
+
+  const RECT_MASK_SIZE =
+    '100% var(--ly),' +
+    '100% calc(100vh - var(--ly) - var(--lh)),' +
+    'var(--lx) var(--lh),' +
+    'calc(100vw - var(--lx) - var(--lw)) var(--lh)';
+
+  const RECT_MASK_POS =
+    '0 0,' +
+    '0 calc(var(--ly) + var(--lh)),' +
+    '0 var(--ly),' +
+    'calc(var(--lx) + var(--lw)) var(--ly)';
+
+  const CIRCLE_MASK_IMAGE =
+    'radial-gradient(' +
+      'ellipse calc(var(--lw) / 2) calc(var(--lh) / 2) ' +
+      'at calc(var(--lx) + var(--lw) / 2) calc(var(--ly) + var(--lh) / 2),' +
+      'transparent 98.5%, black 100%)';
+
+  let lastShape = null;
+
   function applyGeometry() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
     const { lx, ly, lw, lh } = clampedLens();
 
-    // Update SVG mask background to cover full viewport
-    maskBgEl.setAttribute('x', '0');
-    maskBgEl.setAttribute('y', '0');
-    maskBgEl.setAttribute('width',  vw);
-    maskBgEl.setAttribute('height', vh);
+    // Update the 4 CSS custom properties — only cheap setProperty calls each frame
+    overlayEl.style.setProperty('--lx', `${lx}px`);
+    overlayEl.style.setProperty('--ly', `${ly}px`);
+    overlayEl.style.setProperty('--lw', `${lw}px`);
+    overlayEl.style.setProperty('--lh', `${lh}px`);
 
-    // Update the hole shape
-    if (state.shape === 'circle') {
-      maskHoleEl.setAttribute('cx', lx + lw / 2);
-      maskHoleEl.setAttribute('cy', ly + lh / 2);
-      maskHoleEl.setAttribute('rx', lw / 2);
-      maskHoleEl.setAttribute('ry', lh / 2);
-    } else {
-      maskHoleEl.setAttribute('x',      lx);
-      maskHoleEl.setAttribute('y',      ly);
-      maskHoleEl.setAttribute('width',  lw);
-      maskHoleEl.setAttribute('height', lh);
+    // Swap mask style only when shape changes (not every frame)
+    if (state.shape !== lastShape) {
+      lastShape = state.shape;
+      if (state.shape === 'circle') {
+        overlayEl.style.maskImage         = CIRCLE_MASK_IMAGE;
+        overlayEl.style.webkitMaskImage   = CIRCLE_MASK_IMAGE;
+        overlayEl.style.maskSize          = 'cover';
+        overlayEl.style.webkitMaskSize    = 'cover';
+        overlayEl.style.maskPosition      = '0 0';
+        overlayEl.style.webkitMaskPosition= '0 0';
+        overlayEl.style.maskRepeat        = 'no-repeat';
+        overlayEl.style.webkitMaskRepeat  = 'no-repeat';
+      } else {
+        overlayEl.style.maskImage          = RECT_MASK_IMAGE;
+        overlayEl.style.webkitMaskImage    = RECT_MASK_IMAGE;
+        overlayEl.style.maskSize           = RECT_MASK_SIZE;
+        overlayEl.style.webkitMaskSize     = RECT_MASK_SIZE;
+        overlayEl.style.maskPosition       = RECT_MASK_POS;
+        overlayEl.style.webkitMaskPosition = RECT_MASK_POS;
+        overlayEl.style.maskRepeat         = 'no-repeat';
+        overlayEl.style.webkitMaskRepeat   = 'no-repeat';
+        overlayEl.style.maskComposite      = 'add';
+        overlayEl.style.webkitMaskComposite= 'source-over';
+      }
     }
 
-    // Update blur filter on overlay
+    // Update blur filter
     const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.88)`;
-    overlayEl.style.backdropFilter         = blurFilter;
-    overlayEl.style.webkitBackdropFilter   = blurFilter;
+    overlayEl.style.backdropFilter       = blurFilter;
+    overlayEl.style.webkitBackdropFilter = blurFilter;
 
-    // Update border element to match lens
+    // Update lens border
     Object.assign(borderEl.style, {
       left:         `${lx}px`,
       top:          `${ly}px`,
@@ -451,8 +472,7 @@
     state.shape      = settings.shape      ?? state.shape;
     state.effect     = settings.effect     ?? state.effect;
 
-    // Ensure mask hole is the right SVG element for the shape
-    syncMaskHoleElement();
+    lastShape = null; // force mask-image swap on first applyGeometry
     applyEffect(state.effect);
 
     root.style.display = 'block';
@@ -490,22 +510,10 @@
 
   // ─── Shape ────────────────────────────────────────────────────────────────────
 
-  function syncMaskHoleElement() {
-    const wantTag = state.shape === 'circle' ? 'ellipse' : 'rect';
-    if (maskHoleEl.tagName.toLowerCase() === wantTag) return;
-
-    const newHole = document.createElementNS(SVG_NS, wantTag);
-    newHole.setAttribute('fill', 'black');
-    maskHoleEl.parentNode.replaceChild(newHole, maskHoleEl);
-    maskHoleEl = newHole;
-  }
-
   function setShape(shape) {
     state.shape = shape;
-    if (state.active) {
-      syncMaskHoleElement();
-      applyGeometry();
-    }
+    lastShape = null; // force mask-image swap on next applyGeometry
+    if (state.active) applyGeometry();
     persistSettings();
   }
 
