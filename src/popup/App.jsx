@@ -42,9 +42,32 @@ const EFFECTS = [
   { id: 'police',     label: 'Police', color: 'police' },
   { id: 'flashlight', label: 'Torch',  color: '#FFF5CC' },
   { id: 'matrix',     label: 'Matrix', color: '#00ff41' },
+  { id: 'cctv',       label: 'CCTV',   color: '#00dc50' },
 ];
 
-// ─── Messaging ────────────────────────────────────────────────────────────────
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const DEFAULT_SCHEDULER = {
+  enabled: false,
+  days: [1, 2, 3, 4, 5],
+  startHour: 9, startMin: 0,
+  endHour: 18,  endMin: 0,
+};
+
+const DEFAULT_HOTKEY = { key: 'x', altKey: true, ctrlKey: false, shiftKey: false };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function hotkeyLabel(hk) {
+  const parts = [];
+  if (hk.ctrlKey)  parts.push('Ctrl');
+  if (hk.altKey)   parts.push('Alt');
+  if (hk.shiftKey) parts.push('Shift');
+  parts.push(hk.key.toUpperCase());
+  return parts.join(' + ');
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
 
 async function sendToContent(msg) {
   try {
@@ -59,6 +82,7 @@ async function sendToContent(msg) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [tab,          setTab]          = useState('lens');
   const [active,       setActive]       = useState(false);
   const [blurAmount,   setBlurAmount]   = useState(20);
   const [locked,       setLocked]       = useState(false);
@@ -66,15 +90,21 @@ export default function App() {
   const [activePreset, setActivePreset] = useState(null);
   const [shape,        setShape]        = useState('rect');
   const [effect,       setEffect]       = useState('default');
+  const [customColor,  setCustomColor]  = useState('#00D1FF');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [screenGuard,  setScreenGuard]  = useState(false);
+  const [hotkey,       setHotkey]       = useState(DEFAULT_HOTKEY);
+  const [scheduler,    setScheduler]    = useState(DEFAULT_SCHEDULER);
   const [loading,      setLoading]      = useState(true);
   const [sending,      setSending]      = useState(false);
+  const [recording,    setRecording]    = useState(false);
 
-  // Refs so callbacks always see latest value without stale closure
-  const activeRef     = useRef(false);
-  const blurRef       = useRef(20);
-  const lockedRef     = useRef(false);
-  const shapeRef      = useRef('rect');
-  const effectRef     = useRef('default');
+  const activeRef    = useRef(false);
+  const blurRef      = useRef(20);
+  const lockedRef    = useRef(false);
+  const shapeRef     = useRef('rect');
+  const effectRef    = useRef('default');
+  const recordingRef = useRef(false);
 
   function syncActive(v)  { setActive(v);      activeRef.current  = v; }
   function syncBlur(v)    { setBlurAmount(v);   blurRef.current    = v; }
@@ -82,7 +112,8 @@ export default function App() {
   function syncShape(v)   { setShape(v);        shapeRef.current   = v; }
   function syncEffect(v)  { setEffect(v);       effectRef.current  = v; }
 
-  // Load state from content script on open
+  // ── Load state ───────────────────────────────────────────────────────────────
+
   useEffect(() => {
     sendToContent({ type: 'GET_STATE' }).then(res => {
       if (res) {
@@ -91,6 +122,11 @@ export default function App() {
         syncLocked(res.locked ?? false);
         syncShape(res.shape ?? 'rect');
         syncEffect(res.effect ?? 'default');
+        if (res.customColor)  setCustomColor(res.customColor);
+        if (res.soundEnabled !== undefined) setSoundEnabled(res.soundEnabled);
+        if (res.screenGuard  !== undefined) setScreenGuard(res.screenGuard);
+        if (res.hotkey)       setHotkey(res.hotkey);
+        if (res.scheduler)    setScheduler({ ...DEFAULT_SCHEDULER, ...res.scheduler });
       }
       setLoading(false);
     });
@@ -106,7 +142,6 @@ export default function App() {
     });
   }, []);
 
-  // Listen for state push from content (e.g. Alt+X)
   useEffect(() => {
     const listener = (msg) => {
       if (msg.type === 'STATE_CHANGED') syncActive(msg.active);
@@ -115,7 +150,32 @@ export default function App() {
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────────
+  // ── Hotkey recording ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!recordingRef.current) return;
+      e.preventDefault(); e.stopPropagation();
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+      const hk = {
+        key:      e.key.toLowerCase(),
+        altKey:   e.altKey,
+        ctrlKey:  e.ctrlKey,
+        shiftKey: e.shiftKey,
+      };
+      setHotkey(hk);
+      setRecording(false);
+      sendToContent({ type: 'SET_HOTKEY', hotkey: hk });
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleToggle = useCallback(async () => {
     if (sending) return;
@@ -171,7 +231,42 @@ export default function App() {
     } catch { /* non-http */ }
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const handleCustomColor = useCallback(async (e) => {
+    const val = e.target.value;
+    setCustomColor(val);
+    await sendToContent({ type: 'SET_CUSTOM_COLOR', color: val });
+  }, []);
+
+  const handleSound = useCallback(async (e) => {
+    const val = e.target.checked;
+    setSoundEnabled(val);
+    await sendToContent({ type: 'SET_SOUND', enabled: val });
+  }, []);
+
+  const handleScreenGuard = useCallback(async (e) => {
+    const val = e.target.checked;
+    setScreenGuard(val);
+    await sendToContent({ type: 'SET_SCREEN_GUARD', enabled: val });
+  }, []);
+
+  const handleSchedulerChange = useCallback(async (patch) => {
+    const next = { ...scheduler, ...patch };
+    setScheduler(next);
+    await sendToContent({ type: 'SET_SCHEDULER', scheduler: next });
+  }, [scheduler]);
+
+  const toggleSchedulerDay = useCallback((dayIndex) => {
+    const days = scheduler.days.includes(dayIndex)
+      ? scheduler.days.filter(d => d !== dayIndex)
+      : [...scheduler.days, dayIndex].sort((a,b) => a-b);
+    handleSchedulerChange({ days });
+  }, [scheduler, handleSchedulerChange]);
+
+  const openStats = useCallback(() => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('stats/stats.html') });
+  }, []);
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) return (
     <div className="loading-screen">
@@ -200,162 +295,356 @@ export default function App() {
           <h1>Privacy Lens</h1>
           <p>Stealth viewing shield</p>
         </div>
-        <div style={{ marginLeft: 'auto' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="stats-btn" onClick={openStats} title="Weekly Stats">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="1" y="6" width="2" height="5" rx=".5" fill="currentColor"/>
+              <rect x="5" y="3" width="2" height="8" rx=".5" fill="currentColor"/>
+              <rect x="9" y="1" width="2" height="10" rx=".5" fill="currentColor"/>
+            </svg>
+          </button>
           {active ? <div className="active-indicator" /> : <div className="inactive-indicator" />}
         </div>
       </div>
 
-      {/* ── Main Toggle ── */}
-      <div className={`toggle-section${active ? ' active' : ''}${sending ? ' sending' : ''}`} onClick={handleToggle}>
-        <div className="toggle-info">
-          <span className="toggle-label">Privacy Mode</span>
-          <span className="toggle-status">
-            {sending ? 'Applying…' : active ? 'Screen blurred — lens active' : 'Click to activate'}
-          </span>
-        </div>
-        <label className="switch" onClick={e => e.stopPropagation()}>
-          <input type="checkbox" checked={active} onChange={handleToggle} disabled={sending} />
-          <div className="switch-track" />
-          <div className="switch-thumb" />
-        </label>
+      {/* ── Tab Bar ── */}
+      <div className="tab-bar">
+        {[['lens','Lens'],['schedule','Schedule'],['settings','Settings']].map(([id,label]) => (
+          <button
+            key={id}
+            className={`tab-btn${tab === id ? ' active' : ''}`}
+            onClick={() => setTab(id)}
+          >{label}</button>
+        ))}
       </div>
 
-      {/* ── Shape Selector ── */}
-      <div className="section">
-        <div className="section-title">Lens Shape</div>
-        <div className="shape-row">
-          {SHAPES.map(s => (
-            <button
-              key={s.id}
-              className={`shape-btn${shape === s.id ? ' active' : ''}`}
-              onClick={() => handleShape(s.id)}
-            >
-              <span className="shape-icon" style={{ color: shape === s.id ? 'var(--cyan)' : 'var(--text-muted)' }}>
-                {s.icon}
+      {/* ══ TAB: LENS ══ */}
+      {tab === 'lens' && (
+        <div>
+          {/* ── Main Toggle ── */}
+          <div className={`toggle-section${active ? ' active' : ''}${sending ? ' sending' : ''}`} onClick={handleToggle}>
+            <div className="toggle-info">
+              <span className="toggle-label">Privacy Mode</span>
+              <span className="toggle-status">
+                {sending ? 'Applying…' : active ? 'Screen blurred — lens active' : 'Click to activate'}
               </span>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
+            </div>
+            <label className="switch" onClick={e => e.stopPropagation()}>
+              <input type="checkbox" checked={active} onChange={handleToggle} disabled={sending} />
+              <div className="switch-track" />
+              <div className="switch-thumb" />
+            </label>
+          </div>
 
-      <div className="divider" />
+          {/* ── Shape ── */}
+          <div className="section">
+            <div className="section-title">Lens Shape</div>
+            <div className="shape-row">
+              {SHAPES.map(s => (
+                <button
+                  key={s.id}
+                  className={`shape-btn${shape === s.id ? ' active' : ''}`}
+                  onClick={() => handleShape(s.id)}
+                >
+                  <span className="shape-icon" style={{ color: shape === s.id ? 'var(--cyan)' : 'var(--text-muted)' }}>
+                    {s.icon}
+                  </span>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* ── Presets ── */}
-      <div className="section">
-        <div className="section-title">Size Presets</div>
-        <div className="presets-grid">
-          {PRESETS.map(p => (
-            <button
-              key={p.id}
-              className={`preset-btn${activePreset === p.id ? ' active' : ''}`}
-              onClick={() => handlePreset(p.id)}
-              title={p.desc}
-            >
-              <div className="preset-icon" style={{ color: activePreset === p.id ? 'var(--cyan)' : 'var(--text-muted)' }}>
-                {p.icon}
+          <div className="divider" />
+
+          {/* ── Presets ── */}
+          <div className="section">
+            <div className="section-title">Size Presets</div>
+            <div className="presets-grid">
+              {PRESETS.map(p => (
+                <button
+                  key={p.id}
+                  className={`preset-btn${activePreset === p.id ? ' active' : ''}`}
+                  onClick={() => handlePreset(p.id)}
+                  title={p.desc}
+                >
+                  <div className="preset-icon" style={{ color: activePreset === p.id ? 'var(--cyan)' : 'var(--text-muted)' }}>
+                    {p.icon}
+                  </div>
+                  <span className="preset-name">{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* ── Effects ── */}
+          <div className="section">
+            <div className="section-title">Lens Effect</div>
+            <div className="effects-row">
+              {EFFECTS.map(ef => (
+                <button
+                  key={ef.id}
+                  className={`effect-btn${effect === ef.id ? ' active' : ''}`}
+                  onClick={() => handleEffect(ef.id)}
+                  title={ef.label}
+                >
+                  {ef.color === 'police'
+                    ? <span className="effect-dot effect-dot-police" style={{ boxShadow: effect === ef.id ? '0 0 6px #FF1744' : 'none' }} />
+                    : <span className="effect-dot" style={{ background: ef.id === 'default' ? customColor : ef.color, boxShadow: effect === ef.id ? `0 0 6px ${ef.color}` : 'none' }} />
+                  }
+                  <span className="effect-label">{ef.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* ── Blur ── */}
+          <div className="section">
+            <div className="section-title">Blur Intensity</div>
+            <div className="slider-row">
+              <span className="slider-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2" opacity=".5"/>
+                  <circle cx="7" cy="7" r="3" fill="currentColor" opacity=".5"/>
+                </svg>
+              </span>
+              <div className="slider-wrap">
+                <input
+                  type="range" min="4" max="40" step="1"
+                  value={blurAmount}
+                  onChange={handleBlurChange}
+                  style={{
+                    background: `linear-gradient(to right, var(--cyan) 0%, var(--cyan) ${blurPct}%, var(--surface-2) ${blurPct}%, var(--surface-2) 100%)`,
+                  }}
+                />
               </div>
-              <span className="preset-name">{p.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="divider" />
-
-      {/* ── Effects ── */}
-      <div className="section">
-        <div className="section-title">Lens Effect</div>
-        <div className="effects-row">
-          {EFFECTS.map(ef => (
-            <button
-              key={ef.id}
-              className={`effect-btn${effect === ef.id ? ' active' : ''}`}
-              onClick={() => handleEffect(ef.id)}
-              title={ef.label}
-            >
-              {ef.color === 'police'
-                ? <span className="effect-dot effect-dot-police" style={{ boxShadow: effect === ef.id ? '0 0 6px #FF1744' : 'none' }} />
-                : <span className="effect-dot" style={{ background: ef.color, boxShadow: effect === ef.id ? `0 0 6px ${ef.color}` : 'none' }} />
-              }
-              <span className="effect-label">{ef.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="divider" />
-
-      {/* ── Blur Slider ── */}
-      <div className="section">
-        <div className="section-title">Blur Intensity</div>
-        <div className="slider-row">
-          <span className="slider-icon">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2" opacity=".5"/>
-              <circle cx="7" cy="7" r="3" fill="currentColor" opacity=".5"/>
-            </svg>
-          </span>
-          <div className="slider-wrap">
-            <input
-              type="range" min="4" max="40" step="1"
-              value={blurAmount}
-              onChange={handleBlurChange}
-              style={{
-                background: `linear-gradient(to right, var(--cyan) 0%, var(--cyan) ${blurPct}%, var(--surface-2) ${blurPct}%, var(--surface-2) 100%)`,
-              }}
-            />
+              <span className="slider-value">{blurAmount}px</span>
+            </div>
           </div>
-          <span className="slider-value">{blurAmount}px</span>
-        </div>
-      </div>
 
-      <div className="divider" />
+          <div className="divider" />
 
-      {/* ── Options ── */}
-      <div className="section">
-        <div className="section-title">Options</div>
-        <div className="option-row">
-          <div className="option-info">
-            <span className="option-label">Lock Lens Position</span>
-            <span className="option-desc">Stop lens following the cursor</span>
+          {/* ── Lock ── */}
+          <div className="section" style={{ paddingBottom: 6 }}>
+            <div className="section-title">Options</div>
+            <div className="option-row">
+              <div className="option-info">
+                <span className="option-label">Lock Lens Position</span>
+                <span className="option-desc">Stop lens following the cursor</span>
+              </div>
+              <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={locked} onChange={handleLock} />
+                <div className="switch-track" />
+                <div className="switch-thumb" />
+              </label>
+            </div>
           </div>
-          <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
-            <input type="checkbox" checked={locked} onChange={handleLock} />
-            <div className="switch-track" />
-            <div className="switch-thumb" />
-          </label>
-        </div>
-        <div className="option-row">
-          <div className="option-info">
-            <span className="option-label">Auto-Activate on This Site</span>
-            <span className="option-desc">Remembers Privacy Mode for this domain</span>
+
+          <div className="divider" />
+
+          {/* ── Hotkeys ── */}
+          <div className="hotkeys-grid">
+            <div className="hotkey-row">
+              <span className="hotkey-label">Panic toggle</span>
+              <div className="hotkey-badge">
+                {hotkeyLabel(hotkey).split(' + ').map((k, i, arr) => (
+                  <span key={i}><span className="kbd">{k}</span>{i < arr.length-1 && <span className="kbd-sep">+</span>}</span>
+                ))}
+              </div>
+            </div>
+            <div className="hotkey-row">
+              <span className="hotkey-label">Resize</span>
+              <div className="hotkey-badge"><span className="kbd">Ctrl</span><span className="kbd-sep">+</span><span className="kbd">Scroll</span></div>
+            </div>
+            <div className="hotkey-row">
+              <span className="hotkey-label">Draw lens</span>
+              <div className="hotkey-badge"><span className="kbd">Shift</span><span className="kbd-sep">+</span><span className="kbd">Drag</span></div>
+            </div>
           </div>
-          <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
-            <input type="checkbox" checked={autoActivate} onChange={handleAutoActivate} />
-            <div className="switch-track" />
-            <div className="switch-thumb" />
-          </label>
         </div>
-      </div>
+      )}
 
-      <div className="divider" />
+      {/* ══ TAB: SCHEDULE ══ */}
+      {tab === 'schedule' && (
+        <div className="tab-content">
+          <div className="section">
+            <div className="option-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="option-info">
+                <span className="option-label">Work Hours Auto-Activate</span>
+                <span className="option-desc">Auto-enable Privacy Mode on a schedule</span>
+              </div>
+              <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={scheduler.enabled}
+                  onChange={e => handleSchedulerChange({ enabled: e.target.checked })}
+                />
+                <div className="switch-track" />
+                <div className="switch-thumb" />
+              </label>
+            </div>
+          </div>
 
-      {/* ── Hotkeys ── */}
-      <div className="hotkeys-grid">
-        <div className="hotkey-row">
-          <span className="hotkey-label">Panic toggle</span>
-          <div className="hotkey-badge"><span className="kbd">Alt</span><span className="kbd-sep">+</span><span className="kbd">X</span></div>
+          <div className="divider" />
+
+          <div className={`section${!scheduler.enabled ? ' disabled-section' : ''}`}>
+            <div className="section-title">Active Days</div>
+            <div className="day-row">
+              {DAYS.map((d, i) => (
+                <button
+                  key={i}
+                  className={`day-btn${scheduler.days.includes(i) ? ' active' : ''}`}
+                  onClick={() => toggleSchedulerDay(i)}
+                  disabled={!scheduler.enabled}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          <div className={`section${!scheduler.enabled ? ' disabled-section' : ''}`}>
+            <div className="section-title">Time Range</div>
+            <div className="time-row">
+              <div className="time-group">
+                <span className="time-label">From</span>
+                <div className="time-inputs">
+                  <input
+                    type="number" min="0" max="23"
+                    className="time-input"
+                    value={pad2(scheduler.startHour)}
+                    disabled={!scheduler.enabled}
+                    onChange={e => handleSchedulerChange({ startHour: Math.max(0, Math.min(23, Number(e.target.value))) })}
+                  />
+                  <span className="time-sep">:</span>
+                  <input
+                    type="number" min="0" max="59" step="5"
+                    className="time-input"
+                    value={pad2(scheduler.startMin)}
+                    disabled={!scheduler.enabled}
+                    onChange={e => handleSchedulerChange({ startMin: Math.max(0, Math.min(59, Number(e.target.value))) })}
+                  />
+                </div>
+              </div>
+              <div className="time-arrow">→</div>
+              <div className="time-group">
+                <span className="time-label">To</span>
+                <div className="time-inputs">
+                  <input
+                    type="number" min="0" max="23"
+                    className="time-input"
+                    value={pad2(scheduler.endHour)}
+                    disabled={!scheduler.enabled}
+                    onChange={e => handleSchedulerChange({ endHour: Math.max(0, Math.min(23, Number(e.target.value))) })}
+                  />
+                  <span className="time-sep">:</span>
+                  <input
+                    type="number" min="0" max="59" step="5"
+                    className="time-input"
+                    value={pad2(scheduler.endMin)}
+                    disabled={!scheduler.enabled}
+                    onChange={e => handleSchedulerChange({ endMin: Math.max(0, Math.min(59, Number(e.target.value))) })}
+                  />
+                </div>
+              </div>
+            </div>
+            {scheduler.enabled && (
+              <p className="schedule-hint">
+                Active {scheduler.days.map(d => DAYS[d]).join(', ')} · {pad2(scheduler.startHour)}:{pad2(scheduler.startMin)}–{pad2(scheduler.endHour)}:{pad2(scheduler.endMin)}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="hotkey-row">
-          <span className="hotkey-label">Resize</span>
-          <div className="hotkey-badge"><span className="kbd">Ctrl</span><span className="kbd-sep">+</span><span className="kbd">Scroll</span></div>
+      )}
+
+      {/* ══ TAB: SETTINGS ══ */}
+      {tab === 'settings' && (
+        <div className="tab-content">
+
+          {/* Custom color */}
+          <div className="section">
+            <div className="section-title">Lens Color (Default Effect)</div>
+            <div className="color-row">
+              <div className="color-preview" style={{ background: customColor, boxShadow: `0 0 10px ${customColor}66` }} />
+              <div className="color-info">
+                <span className="option-label">Accent Color</span>
+                <span className="option-desc">Used when Cyan effect is selected</span>
+              </div>
+              <label className="color-swatch-wrap" title="Pick color">
+                <input type="color" value={customColor} onChange={handleCustomColor} className="color-picker-input" />
+                <span className="color-pick-btn">Pick</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* Hotkey */}
+          <div className="section">
+            <div className="section-title">Panic Hotkey</div>
+            <div className="option-row" style={{ borderBottom: 'none' }}>
+              <div className="option-info">
+                <span className="option-label">Toggle Hotkey</span>
+                <span className="option-desc">{recording ? 'Press any key combo…' : hotkeyLabel(hotkey)}</span>
+              </div>
+              <button
+                className={`record-btn${recording ? ' recording' : ''}`}
+                onClick={() => setRecording(r => !r)}
+              >
+                {recording ? 'Cancel' : 'Change'}
+              </button>
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* Sound */}
+          <div className="section">
+            <div className="section-title">Alerts</div>
+            <div className="option-row">
+              <div className="option-info">
+                <span className="option-label">Panic Sound</span>
+                <span className="option-desc">Tone on activate / deactivate</span>
+              </div>
+              <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={soundEnabled} onChange={handleSound} />
+                <div className="switch-track" />
+                <div className="switch-thumb" />
+              </label>
+            </div>
+
+            <div className="option-row">
+              <div className="option-info">
+                <span className="option-label">Screen Guard</span>
+                <span className="option-desc">Auto-activate on screen share / tab hide</span>
+              </div>
+              <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={screenGuard} onChange={handleScreenGuard} />
+                <div className="switch-track" />
+                <div className="switch-thumb" />
+              </label>
+            </div>
+
+            <div className="option-row" style={{ borderBottom: 'none' }}>
+              <div className="option-info">
+                <span className="option-label">Auto-Activate on This Site</span>
+                <span className="option-desc">Remember Privacy Mode for this domain</span>
+              </div>
+              <label className="switch switch-sm" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={autoActivate} onChange={handleAutoActivate} />
+                <div className="switch-track" />
+                <div className="switch-thumb" />
+              </label>
+            </div>
+          </div>
         </div>
-        <div className="hotkey-row">
-          <span className="hotkey-label">Draw lens</span>
-          <div className="hotkey-badge"><span className="kbd">Shift</span><span className="kbd-sep">+</span><span className="kbd">Drag</span></div>
-        </div>
-      </div>
+      )}
 
     </div>
   );

@@ -4,9 +4,10 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   entry: {
-    popup: './src/popup/index.jsx',
-    content: './src/content/content.js',
+    popup:      './src/popup/index.jsx',
+    content:    './src/content/content.js',
     background: './src/background/background.js',
+    stats:      './src/stats/index.jsx',
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -34,7 +35,8 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: 'src/popup/popup.html', to: 'popup/popup.html' },
+        { from: 'src/popup/popup.html',   to: 'popup/popup.html' },
+        { from: 'src/stats/stats.html',   to: 'stats/stats.html' },
         { from: 'src/icons', to: 'icons' },
       ],
     }),
