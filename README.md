@@ -25,9 +25,9 @@ Activating **Privacy Mode** blurs the entire browser tab with a frosted-glass ov
 
 > Add GIFs or images here once available — drag and drop into the GitHub editor.
 
-| Lens active | Effects grid | Stats page |
+| Lens tab | Effects grid | Stats page |
 |:-----------:|:------------:|:----------:|
-| _screenshot_ | _screenshot_ | _screenshot_ |
+| ![Lens tab](screenshots/popup-lens-tab.png) | _coming soon_ | _coming soon_ |
 
 ---
 
