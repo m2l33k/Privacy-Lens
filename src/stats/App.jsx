@@ -39,22 +39,43 @@ const EFFECT_COLORS = {
 
 // ─── Stats computation ────────────────────────────────────────────────────────
 
+function computeStreak(sessions) {
+  const uniqueDays = [...new Set(sessions.map(s => s.date))].sort();
+  if (!uniqueDays.length) return 0;
+
+  let today = isoToday();
+  let check = today;
+
+  // Allow streak to still count if today has no session yet (yesterday was the last)
+  if (!uniqueDays.includes(today)) {
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const yStr = yest.toISOString().slice(0, 10);
+    if (!uniqueDays.includes(yStr)) return 0;
+    check = yStr;
+  }
+
+  let streak = 0;
+  while (uniqueDays.includes(check)) {
+    streak++;
+    const prev = new Date(check + 'T00:00:00');
+    prev.setDate(prev.getDate() - 1);
+    check = prev.toISOString().slice(0, 10);
+  }
+  return streak;
+}
+
 function computeStats(sessions) {
   const days7 = lastNDays(7);
   const today  = isoToday();
 
-  // Minutes per day (last 7)
   const byDay = {};
   days7.forEach(d => { byDay[d] = 0; });
 
-  // Week totals
   let weekTotal = 0;
   let todayTotal = 0;
-
-  // Effect usage (all time)
   const effectMins = {};
-  // Site usage (all time)
-  const siteMins = {};
+  const siteMins   = {};
 
   sessions.forEach(s => {
     const mins = s.minutes || 0;
@@ -64,9 +85,7 @@ function computeStats(sessions) {
       if (s.date === today) todayTotal += mins;
     }
     effectMins[s.effect] = (effectMins[s.effect] || 0) + mins;
-    if (s.site) {
-      siteMins[s.site] = (siteMins[s.site] || 0) + mins;
-    }
+    if (s.site) siteMins[s.site] = (siteMins[s.site] || 0) + mins;
   });
 
   const maxDay = Math.max(...Object.values(byDay), 1);
@@ -80,21 +99,24 @@ function computeStats(sessions) {
     .slice(0, 5);
 
   const totalMinutes = sessions.reduce((s, r) => s + (r.minutes || 0), 0);
+  const streak = computeStreak(sessions);
 
-  return { byDay, days7, maxDay, weekTotal, todayTotal, topEffects, topSites, totalMinutes };
+  return { byDay, days7, maxDay, weekTotal, todayTotal, topEffects, topSites, totalMinutes, streak };
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function StatsApp() {
-  const [stats, setStats] = useState(null);
-  const [count, setCount] = useState(0);
+  const [stats,    setStats]    = useState(null);
+  const [count,    setCount]    = useState(0);
+  const [sessions, setSessions] = useState([]);
 
   useEffect(() => {
     chrome.storage.local.get(['__pl_sessions__'], res => {
-      const sessions = res.__pl_sessions__ || [];
-      setCount(sessions.length);
-      setStats(computeStats(sessions));
+      const all = res.__pl_sessions__ || [];
+      setSessions(all);
+      setCount(all.length);
+      setStats(computeStats(all));
     });
   }, []);
 
@@ -106,12 +128,28 @@ export default function StatsApp() {
     );
   }
 
-  const { byDay, days7, maxDay, weekTotal, todayTotal, topEffects, topSites, totalMinutes } = stats;
+  const { byDay, days7, maxDay, weekTotal, todayTotal, topEffects, topSites, totalMinutes, streak } = stats;
 
   function fmtMins(m) {
     if (m < 60) return `${m}m`;
     return `${Math.floor(m/60)}h ${m%60}m`;
   }
+
+  function handleExportCSV() {
+    const header = 'Date,Site,Effect,Minutes\n';
+    const rows = sessions
+      .slice()
+      .reverse()
+      .map(s => `${s.date || ''},${s.site || ''},${s.effect || ''},${s.minutes || 0}`)
+      .join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'privacy-lens-stats.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const recentSessions = sessions.slice().reverse().slice(0, 20);
 
   return (
     <div className="page">
@@ -131,6 +169,15 @@ export default function StatsApp() {
           <h1 className="page-title">Privacy Lens</h1>
           <p className="page-sub">Usage Statistics</p>
         </div>
+        {count > 0 && (
+          <button className="export-btn" onClick={handleExportCSV} title="Export CSV">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M6.5 1v7M4 6l2.5 2.5L9 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 10h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Export CSV
+          </button>
+        )}
       </div>
 
       {/* ── Summary cards ── */}
@@ -151,6 +198,10 @@ export default function StatsApp() {
           <div className="card-value">{count}</div>
           <div className="card-label">Sessions</div>
         </div>
+        <div className="card card-wide">
+          <div className="card-value">{streak > 0 ? `${streak}🔥` : '—'}</div>
+          <div className="card-label">Day Streak</div>
+        </div>
       </div>
 
       {/* ── Daily bar chart ── */}
@@ -158,8 +209,8 @@ export default function StatsApp() {
         <div className="section-title">Last 7 Days</div>
         <div className="bar-chart">
           {days7.map(day => {
-            const mins   = byDay[day] || 0;
-            const pct    = maxDay > 0 ? (mins / maxDay) * 100 : 0;
+            const mins    = byDay[day] || 0;
+            const pct     = maxDay > 0 ? (mins / maxDay) * 100 : 0;
             const isToday = day === isoToday();
             return (
               <div key={day} className="bar-col">
@@ -188,17 +239,11 @@ export default function StatsApp() {
               return (
                 <div key={effect} className="h-bar-row">
                   <div className="h-bar-label">
-                    <span
-                      className="effect-dot"
-                      style={{ background: EFFECT_COLORS[effect] || '#888' }}
-                    />
+                    <span className="effect-dot" style={{ background: EFFECT_COLORS[effect] || '#888' }} />
                     <span className="h-bar-name">{effect.charAt(0).toUpperCase() + effect.slice(1)}</span>
                   </div>
                   <div className="h-bar-track">
-                    <div
-                      className="h-bar-fill"
-                      style={{ width: `${pct}%`, background: EFFECT_COLORS[effect] || '#888' }}
-                    />
+                    <div className="h-bar-fill" style={{ width: `${pct}%`, background: EFFECT_COLORS[effect] || '#888' }} />
                   </div>
                   <div className="h-bar-val">{fmtMins(mins)}</div>
                 </div>
@@ -221,15 +266,39 @@ export default function StatsApp() {
                     <span className="h-bar-name site-name">{site}</span>
                   </div>
                   <div className="h-bar-track">
-                    <div
-                      className="h-bar-fill"
-                      style={{ width: `${pct}%`, background: 'var(--cyan)' }}
-                    />
+                    <div className="h-bar-fill" style={{ width: `${pct}%`, background: 'var(--cyan)' }} />
                   </div>
                   <div className="h-bar-val">{fmtMins(mins)}</div>
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Session history ── */}
+      {recentSessions.length > 0 && (
+        <div className="section">
+          <div className="section-title">Recent Sessions</div>
+          <div className="session-table-wrap">
+            <div className="session-table">
+              <div className="session-row session-header">
+                <span>Date</span>
+                <span>Site</span>
+                <span>Effect</span>
+                <span>Time</span>
+              </div>
+              {recentSessions.map((s, i) => (
+                <div key={i} className="session-row">
+                  <span className="session-date">{shortDate(s.date || isoToday())}</span>
+                  <span className="session-site">{s.site || '—'}</span>
+                  <span className="session-effect" style={{ color: EFFECT_COLORS[s.effect] || 'var(--text-muted)' }}>
+                    {s.effect ? s.effect.charAt(0).toUpperCase() + s.effect.slice(1) : '—'}
+                  </span>
+                  <span className="session-mins">{fmtMins(s.minutes || 0)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

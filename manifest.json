@@ -3,7 +3,7 @@
   "name": "Privacy Lens",
   "version": "1.0.0",
   "description": "A dynamic privacy shield — work on sensitive content in public without exposing your screen.",
-  "permissions": ["storage", "activeTab", "scripting", "tabs", "alarms"],
+  "permissions": ["storage", "activeTab", "scripting", "tabs", "alarms", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup/popup.html",

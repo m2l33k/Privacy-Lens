@@ -506,3 +506,115 @@ input[type="range"]::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px var(--cy
   color: var(--cyan);
   animation: pulse 1s ease-in-out infinite;
 }
+
+/* ─── Shape Grid (6 shapes, 3 columns) ────────────────────────────────────── */
+
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+/* ─── Slider label rows ────────────────────────────────────────────────────── */
+
+.slider-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 2px;
+}
+
+.slider-caption {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* ─── Mini select (timer / idle dropdowns) ─────────────────────────────────── */
+
+.mini-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+  transition: border-color .15s;
+}
+.mini-select:hover  { border-color: var(--border-h); }
+.mini-select:focus  { border-color: var(--cyan); }
+
+/* ─── Profile rows ─────────────────────────────────────────────────────────── */
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-row:last-child { border-bottom: none; }
+
+.profile-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.profile-btn {
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+  white-space: nowrap;
+}
+.profile-btn:hover { border-color: var(--cyan-glow); color: var(--cyan); background: var(--cyan-dim); }
+
+/* ─── Import / Export row ──────────────────────────────────────────────────── */
+
+.import-export-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 2px 2px;
+}
+
+.ie-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.ie-btn:hover { border-color: var(--cyan-glow); color: var(--cyan); background: var(--cyan-dim); }
+
+.ie-btn-import {
+  cursor: pointer;
+}
