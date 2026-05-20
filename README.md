@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/icons/logo.png" alt="Privacy Lens" width="260" />
+<img src="src/icons/icons.png" alt="Privacy Lens" width="260" />
 
 # Privacy Lens
 

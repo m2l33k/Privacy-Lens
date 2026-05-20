@@ -1,7 +1,7 @@
 const sharp = require('sharp');
 const path  = require('path');
 
-const src   = path.join(__dirname, '../src/icons/logo.png');
+const src   = path.join(__dirname, '../src/icons/icons.png');
 const sizes = [16, 48, 128];
 
 Promise.all(
