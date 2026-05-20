@@ -1,167 +1,290 @@
 (() => {
   'use strict';
 
-  // ─── State ───────────────────────────────────────────────────────────────────
+  const SVG_NS  = 'http://www.w3.org/2000/svg';
+  const MASK_ID = '__pl_mask__';
+
+  // ─── State ────────────────────────────────────────────────────────────────────
 
   const state = {
-    active: false,
-    lensX: 0,
-    lensY: 0,
-    lensW: 300,
-    lensH: 200,
+    active:     false,
+    lensX:      0,
+    lensY:      0,
+    lensW:      300,
+    lensH:      200,
     blurAmount: 20,
-    locked: false,
-    dragging: false,
+    locked:     false,
+    shape:      'rect',    // 'rect' | 'circle'
+    effect:     'default', // 'default' | 'fire' | 'neon' | 'ice' | 'ghost'
+    dragging:   false,
     dragStartX: 0,
     dragStartY: 0,
-    animFrame: null,
-    pendingX: 0,
-    pendingY: 0,
-    dirty: false,
+    animFrame:  null,
+    pendingX:   0,
+    pendingY:   0,
   };
 
-  // ─── DOM Nodes ────────────────────────────────────────────────────────────────
+  // ─── DOM Refs ─────────────────────────────────────────────────────────────────
 
-  let root = null;
-  let panelTop = null;
-  let panelLeft = null;
-  let panelRight = null;
-  let panelBottom = null;
-  let lensBorder = null;
-  let clickBlocker = null;
-  let dragOverlay = null;
+  let root, svgEl, maskBgEl, maskHoleEl, overlayEl, borderEl,
+      sparksEl, clickBlockerEl, dragOverlayEl, styleEl;
+
+  // ─── Effect CSS ───────────────────────────────────────────────────────────────
+
+  const EFFECTS_CSS = `
+    @keyframes __pl_fire__ {
+      0%  { box-shadow: 0 0 6px #ff4500,0 0 14px #ff6b00,0 0 32px #ff4500,0 0 64px rgba(255,69,0,.3); border-color:#ff6b00; }
+      25% { box-shadow: 0 0 10px #ff8c00,0 0 24px #ffaa00,0 0 50px #ff6b00,0 0 90px rgba(255,140,0,.35); border-color:#ffaa00; }
+      50% { box-shadow: 0 0 4px #ff4500,0 0 10px #ff4500,0 0 24px #ff8c00,0 0 50px rgba(255,69,0,.25); border-color:#ff4500; }
+      75% { box-shadow: 0 0 8px #ff6b00,0 0 18px #ff8c00,0 0 40px #ffaa00,0 0 80px rgba(255,107,0,.3); border-color:#ff8c00; }
+      100%{ box-shadow: 0 0 6px #ff4500,0 0 14px #ff6b00,0 0 32px #ff4500,0 0 64px rgba(255,69,0,.3); border-color:#ff6b00; }
+    }
+    @keyframes __pl_neon__ {
+      0%  { box-shadow:0 0 5px #39ff14,0 0 12px #39ff14,0 0 28px #39ff14,0 0 56px rgba(57,255,20,.4); border-color:#39ff14; }
+      50% { box-shadow:0 0 8px #bf00ff,0 0 18px #bf00ff,0 0 40px #bf00ff,0 0 80px rgba(191,0,255,.45); border-color:#bf00ff; }
+      100%{ box-shadow:0 0 5px #39ff14,0 0 12px #39ff14,0 0 28px #39ff14,0 0 56px rgba(57,255,20,.4); border-color:#39ff14; }
+    }
+    @keyframes __pl_ice__ {
+      0%  { box-shadow:0 0 6px #00d4ff,0 0 14px #00bfff,0 0 30px #87ceeb,0 0 60px rgba(0,212,255,.3); border-color:#87ceeb; }
+      50% { box-shadow:0 0 12px #fff,0 0 26px #00d4ff,0 0 52px #00bfff,0 0 90px rgba(135,206,235,.4); border-color:#fff; }
+      100%{ box-shadow:0 0 6px #00d4ff,0 0 14px #00bfff,0 0 30px #87ceeb,0 0 60px rgba(0,212,255,.3); border-color:#87ceeb; }
+    }
+    @keyframes __pl_spark__ {
+      0%   { transform:translateY(0) translateX(0) scale(1); opacity:.95; }
+      60%  { opacity:.6; }
+      100% { transform:translateY(-55px) translateX(var(--pl-sx,0px)) scale(.08); opacity:0; }
+    }
+    @keyframes __pl_default_pulse__ {
+      0%,100%{ box-shadow:0 0 0 1px rgba(0,209,255,.12),0 0 14px rgba(0,209,255,.3),inset 0 0 14px rgba(0,209,255,.07); }
+      50%    { box-shadow:0 0 0 1px rgba(0,209,255,.2), 0 0 22px rgba(0,209,255,.45),inset 0 0 18px rgba(0,209,255,.12); }
+    }
+    .__pl_border__ {
+      position: fixed !important;
+      box-sizing: border-box !important;
+      pointer-events: none !important;
+      z-index: 2147483641 !important;
+      transition: border-radius .25s ease;
+    }
+    .__pl_border__.pl-default {
+      border: 1px solid rgba(0,209,255,.65) !important;
+      animation: __pl_default_pulse__ 3s ease-in-out infinite !important;
+    }
+    .__pl_border__.pl-fire {
+      border: 1.5px solid #ff6b00 !important;
+      animation: __pl_fire__ .38s ease-in-out infinite !important;
+    }
+    .__pl_border__.pl-neon {
+      border: 1px solid #39ff14 !important;
+      animation: __pl_neon__ 1.5s ease-in-out infinite !important;
+    }
+    .__pl_border__.pl-ice {
+      border: 1px solid #87ceeb !important;
+      animation: __pl_ice__ 2.2s ease-in-out infinite !important;
+    }
+    .__pl_border__.pl-ghost {
+      border: 1px solid rgba(255,255,255,.22) !important;
+      box-shadow: none !important;
+      animation: none !important;
+    }
+    .__pl_spark__ {
+      position: absolute !important;
+      border-radius: 60% 60% 40% 40% !important;
+      pointer-events: none !important;
+      animation: __pl_spark__ var(--pl-sd,.7s) ease-out infinite !important;
+      animation-delay: var(--pl-sdelay,0s) !important;
+      bottom: -1px !important;
+      left: var(--pl-sleft,50%) !important;
+    }
+    .__pl_spark__:nth-child(odd)  { width:3px!important;height:6px!important;background:linear-gradient(to top,#ff4500,#ffcc00)!important; }
+    .__pl_spark__:nth-child(even) { width:2px!important;height:4px!important;background:linear-gradient(to top,#ff6b00,#ff4500)!important; }
+  `;
 
   // ─── Build DOM ────────────────────────────────────────────────────────────────
 
   function buildDOM() {
+    styleEl = document.createElement('style');
+    styleEl.id = '__pl_style__';
+    styleEl.textContent = EFFECTS_CSS;
+    (document.head || document.documentElement).appendChild(styleEl);
+
     root = document.createElement('div');
-    root.id = '__privacy-lens-root__';
+    root.id = '__pl_root__';
     root.setAttribute('data-privacy-lens', 'true');
 
-    const panelStyle = `
-      position: fixed;
-      z-index: 2147483640;
-      pointer-events: all;
-      background: rgba(10, 10, 15, 0.12);
-      backdrop-filter: blur(${state.blurAmount}px) saturate(180%);
-      -webkit-backdrop-filter: blur(${state.blurAmount}px) saturate(180%);
-      transition: backdrop-filter 0.15s ease;
+    // ── SVG mask definition (zero-size, just defines the <mask>) ──
+    svgEl = document.createElementNS(SVG_NS, 'svg');
+    Object.assign(svgEl.style, {
+      position: 'fixed', width: '0', height: '0',
+      overflow: 'hidden', pointerEvents: 'none', top: '0', left: '0',
+    });
+    svgEl.setAttribute('aria-hidden', 'true');
+
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const mask = document.createElementNS(SVG_NS, 'mask');
+    mask.id = MASK_ID;
+    mask.setAttribute('maskUnits', 'userSpaceOnUse');
+
+    maskBgEl = document.createElementNS(SVG_NS, 'rect');
+    maskBgEl.setAttribute('fill', 'white');
+
+    // Default hole shape is rect; swapped to ellipse for circle mode
+    maskHoleEl = document.createElementNS(SVG_NS, 'rect');
+    maskHoleEl.setAttribute('fill', 'black');
+
+    mask.appendChild(maskBgEl);
+    mask.appendChild(maskHoleEl);
+    defs.appendChild(mask);
+    svgEl.appendChild(defs);
+
+    // ── Single full-screen blur overlay (mask punches the lens hole) ──
+    overlayEl = document.createElement('div');
+    overlayEl.style.cssText = `
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2147483638 !important;
+      background: rgba(8,8,14,.2) !important;
+      pointer-events: none !important;
+      mask: url(#${MASK_ID}) !important;
+      -webkit-mask: url(#${MASK_ID}) !important;
     `;
 
-    panelTop    = el('div', panelStyle);
-    panelLeft   = el('div', panelStyle);
-    panelRight  = el('div', panelStyle);
-    panelBottom = el('div', panelStyle);
+    // ── Lens border ──
+    borderEl = document.createElement('div');
+    borderEl.className = '__pl_border__ pl-default';
 
-    lensBorder = el('div', `
-      position: fixed;
-      z-index: 2147483641;
-      pointer-events: none;
-      border: 1px solid rgba(0, 209, 255, 0.6);
-      border-radius: 2px;
-      box-shadow:
-        0 0 0 1px rgba(0, 209, 255, 0.15),
-        0 0 12px 0 rgba(0, 209, 255, 0.25),
-        inset 0 0 12px 0 rgba(0, 209, 255, 0.05);
-      box-sizing: border-box;
-    `);
+    // ── Fire sparks (visible only with fire effect) ──
+    sparksEl = document.createElement('div');
+    sparksEl.style.cssText = 'position:absolute;inset:0;overflow:visible;pointer-events:none;';
 
-    // Transparent overlay that blocks clicks outside the lens
-    clickBlocker = el('div', `
-      position: fixed;
-      inset: 0;
-      z-index: 2147483642;
-      pointer-events: all;
-      cursor: default;
-    `);
+    const SPARK_CFG = [
+      { left: '8%',  delay: 0,    dur: .65, dx: -5 },
+      { left: '20%', delay: .18,  dur: .80, dx:  4 },
+      { left: '33%', delay: .07,  dur: .55, dx: -3 },
+      { left: '46%', delay: .28,  dur: .90, dx:  6 },
+      { left: '59%', delay: .12,  dur: .70, dx: -4 },
+      { left: '72%', delay: .38,  dur: .60, dx:  3 },
+      { left: '85%', delay: .22,  dur: .75, dx: -6 },
+    ];
+    SPARK_CFG.forEach(cfg => {
+      const s = document.createElement('div');
+      s.className = '__pl_spark__';
+      s.style.setProperty('--pl-sleft',  cfg.left);
+      s.style.setProperty('--pl-sdelay', `${cfg.delay}s`);
+      s.style.setProperty('--pl-sd',     `${cfg.dur}s`);
+      s.style.setProperty('--pl-sx',     `${cfg.dx}px`);
+      sparksEl.appendChild(s);
+    });
+    sparksEl.style.display = 'none';
+    borderEl.appendChild(sparksEl);
 
-    // Invisible overlay to capture Shift+Drag anywhere
-    dragOverlay = el('div', `
-      position: fixed;
-      inset: 0;
-      z-index: 2147483643;
-      pointer-events: none;
-      cursor: crosshair;
-    `);
+    // ── Click blocker (captures all pointer events outside the lens) ──
+    clickBlockerEl = document.createElement('div');
+    clickBlockerEl.style.cssText = `
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2147483642 !important;
+      pointer-events: all !important;
+    `;
 
-    [panelTop, panelLeft, panelRight, panelBottom, lensBorder, clickBlocker, dragOverlay]
-      .forEach(n => root.appendChild(n));
+    // ── Drag overlay (activated while Shift is held) ──
+    dragOverlayEl = document.createElement('div');
+    dragOverlayEl.style.cssText = `
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2147483643 !important;
+      pointer-events: none !important;
+      cursor: crosshair !important;
+    `;
 
+    [svgEl, overlayEl, borderEl, clickBlockerEl, dragOverlayEl].forEach(n => root.appendChild(n));
     document.documentElement.appendChild(root);
 
-    clickBlocker.addEventListener('click',      onBlockerClick,  true);
-    clickBlocker.addEventListener('mousedown',  onBlockerMousedown, true);
-    clickBlocker.addEventListener('wheel',      onBlockerWheel,  { capture: true, passive: false });
-    clickBlocker.addEventListener('contextmenu', onBlockerContextMenu, true);
-  }
+    // Blocker events
+    clickBlockerEl.addEventListener('click',       onBlockerClick,       true);
+    clickBlockerEl.addEventListener('mousedown',   onBlockerMousedown,   true);
+    clickBlockerEl.addEventListener('mouseup',     onBlockerMouseup,     true);
+    clickBlockerEl.addEventListener('wheel',       onBlockerWheel,       { capture: true, passive: false });
+    clickBlockerEl.addEventListener('contextmenu', onBlockerContextMenu, true);
 
-  function el(tag, cssText) {
-    const node = document.createElement(tag);
-    node.style.cssText = cssText;
-    return node;
+    // Drag events
+    dragOverlayEl.addEventListener('mousedown', onDragMouseDown, true);
+    document.addEventListener('mousemove',      onDragMouseMove, true);
+    document.addEventListener('mouseup',        onDragMouseUp,   true);
   }
 
   // ─── Geometry ─────────────────────────────────────────────────────────────────
 
-  function applyGeometry() {
-    const { lensX, lensY, lensW, lensH } = state;
+  function clampedLens() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-
-    const lx = Math.max(0, Math.min(lensX, vw - lensW));
-    const ly = Math.max(0, Math.min(lensY, vh - lensH));
-    const lx2 = lx + lensW;
-    const ly2 = ly + lensH;
-
-    // Top panel
-    setRect(panelTop,    0,   0,    vw,      ly);
-    // Left panel
-    setRect(panelLeft,   0,   ly,   lx,      lensH);
-    // Right panel
-    setRect(panelRight,  lx2, ly,   vw - lx2, lensH);
-    // Bottom panel
-    setRect(panelBottom, 0,   ly2,  vw,      vh - ly2);
-    // Lens border
-    setRect(lensBorder,  lx,  ly,   lensW,   lensH);
+    const lx = Math.round(Math.max(0, Math.min(state.lensX, vw - state.lensW)));
+    const ly = Math.round(Math.max(0, Math.min(state.lensY, vh - state.lensH)));
+    return { lx, ly, lw: state.lensW, lh: state.lensH };
   }
 
-  function setRect(node, x, y, w, h) {
-    node.style.left   = `${x}px`;
-    node.style.top    = `${y}px`;
-    node.style.width  = `${Math.max(0, w)}px`;
-    node.style.height = `${Math.max(0, h)}px`;
+  function applyGeometry() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const { lx, ly, lw, lh } = clampedLens();
+
+    // Update SVG mask background to cover full viewport
+    maskBgEl.setAttribute('x', '0');
+    maskBgEl.setAttribute('y', '0');
+    maskBgEl.setAttribute('width',  vw);
+    maskBgEl.setAttribute('height', vh);
+
+    // Update the hole shape
+    if (state.shape === 'circle') {
+      maskHoleEl.setAttribute('cx', lx + lw / 2);
+      maskHoleEl.setAttribute('cy', ly + lh / 2);
+      maskHoleEl.setAttribute('rx', lw / 2);
+      maskHoleEl.setAttribute('ry', lh / 2);
+    } else {
+      maskHoleEl.setAttribute('x',      lx);
+      maskHoleEl.setAttribute('y',      ly);
+      maskHoleEl.setAttribute('width',  lw);
+      maskHoleEl.setAttribute('height', lh);
+    }
+
+    // Update blur filter on overlay
+    const blurFilter = `blur(${state.blurAmount}px) saturate(160%) brightness(.88)`;
+    overlayEl.style.backdropFilter         = blurFilter;
+    overlayEl.style.webkitBackdropFilter   = blurFilter;
+
+    // Update border element to match lens
+    Object.assign(borderEl.style, {
+      left:         `${lx}px`,
+      top:          `${ly}px`,
+      width:        `${lw}px`,
+      height:       `${lh}px`,
+      borderRadius: state.shape === 'circle' ? '50%' : '2px',
+    });
   }
 
   function isInLens(cx, cy) {
-    const { lensX, lensY, lensW, lensH } = state;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const lx = Math.max(0, Math.min(lensX, vw - lensW));
-    const ly = Math.max(0, Math.min(lensY, vh - lensH));
-    return cx >= lx && cx <= lx + lensW && cy >= ly && cy <= ly + lensH;
+    const { lx, ly, lw, lh } = clampedLens();
+    if (state.shape === 'circle') {
+      const dx = (cx - (lx + lw / 2)) / (lw / 2);
+      const dy = (cy - (ly + lh / 2)) / (lh / 2);
+      return dx * dx + dy * dy <= 1;
+    }
+    return cx >= lx && cx <= lx + lw && cy >= ly && cy <= ly + lh;
   }
 
-  // ─── Smooth Lens Tracking ─────────────────────────────────────────────────────
+  // ─── Smooth Tracking (LERP) ───────────────────────────────────────────────────
 
-  const LERP_FACTOR = 0.18;
-
-  function scheduleFrame() {
-    if (state.animFrame !== null) return;
-    state.animFrame = requestAnimationFrame(tick);
-  }
+  const LERP = 0.16;
 
   function tick() {
     state.animFrame = null;
     if (!state.active || state.locked) return;
-
     const dx = state.pendingX - state.lensX;
     const dy = state.pendingY - state.lensY;
-
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-      state.lensX += dx * LERP_FACTOR;
-      state.lensY += dy * LERP_FACTOR;
+    if (Math.abs(dx) > .4 || Math.abs(dy) > .4) {
+      state.lensX += dx * LERP;
+      state.lensY += dy * LERP;
       applyGeometry();
-      scheduleFrame();
+      state.animFrame = requestAnimationFrame(tick);
     } else {
       state.lensX = state.pendingX;
       state.lensY = state.pendingY;
@@ -169,35 +292,44 @@
     }
   }
 
-  // ─── Event Handlers ───────────────────────────────────────────────────────────
+  function scheduleFrame() {
+    if (state.animFrame === null) {
+      state.animFrame = requestAnimationFrame(tick);
+    }
+  }
+
+  // ─── Mouse Events ─────────────────────────────────────────────────────────────
 
   function onMouseMove(e) {
     if (!state.active || state.locked || state.dragging) return;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
     state.pendingX = Math.max(0, Math.min(e.clientX - state.lensW / 2, vw - state.lensW));
     state.pendingY = Math.max(0, Math.min(e.clientY - state.lensH / 2, vh - state.lensH));
     scheduleFrame();
   }
 
+  // ─── Passthrough helpers ──────────────────────────────────────────────────────
+
+  function passthroughEvent(e, type, extra = {}) {
+    // Synchronously hide blocker, find real target, restore
+    clickBlockerEl.style.pointerEvents = 'none';
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    clickBlockerEl.style.pointerEvents = 'all';
+    if (!target || root.contains(target)) return;
+    target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, view: window,
+      clientX: e.clientX, clientY: e.clientY,
+      screenX: e.screenX, screenY: e.screenY,
+      button: e.button, buttons: e.buttons,
+      ctrlKey: e.ctrlKey, shiftKey: e.shiftKey,
+      altKey: e.altKey, metaKey: e.metaKey,
+      ...extra,
+    }));
+  }
+
   function onBlockerClick(e) {
     if (isInLens(e.clientX, e.clientY)) {
-      // Pass click through to the page beneath
-      clickBlocker.style.pointerEvents = 'none';
-      const target = document.elementFromPoint(e.clientX, e.clientY);
-      if (target && target !== clickBlocker) {
-        target.dispatchEvent(new MouseEvent('click', {
-          bubbles: true, cancelable: true,
-          clientX: e.clientX, clientY: e.clientY,
-          screenX: e.screenX, screenY: e.screenY,
-          button: e.button, buttons: e.buttons,
-          ctrlKey: e.ctrlKey, shiftKey: e.shiftKey,
-          altKey: e.altKey, metaKey: e.metaKey,
-        }));
-      }
-      requestAnimationFrame(() => {
-        if (state.active) clickBlocker.style.pointerEvents = 'all';
-      });
+      passthroughEvent(e, 'click');
     }
     e.preventDefault();
     e.stopPropagation();
@@ -205,41 +337,36 @@
 
   function onBlockerMousedown(e) {
     if (isInLens(e.clientX, e.clientY)) {
-      clickBlocker.style.pointerEvents = 'none';
-      const target = document.elementFromPoint(e.clientX, e.clientY);
-      if (target && target !== clickBlocker) {
-        target.dispatchEvent(new MouseEvent('mousedown', {
-          bubbles: true, cancelable: true,
-          clientX: e.clientX, clientY: e.clientY,
-          button: e.button, buttons: e.buttons,
-        }));
-      }
-      requestAnimationFrame(() => {
-        if (state.active) clickBlocker.style.pointerEvents = 'all';
-      });
+      passthroughEvent(e, 'mousedown');
+    } else {
+      e.preventDefault();
+    }
+    e.stopPropagation();
+  }
+
+  function onBlockerMouseup(e) {
+    if (isInLens(e.clientX, e.clientY)) {
+      passthroughEvent(e, 'mouseup');
     }
     e.stopPropagation();
   }
 
   function onBlockerWheel(e) {
-    if (isInLens(e.clientX, e.clientY)) {
-      // Pass scroll through to the underlying element
-      clickBlocker.style.pointerEvents = 'none';
-      const target = document.elementFromPoint(e.clientX, e.clientY);
-      if (target) {
-        target.dispatchEvent(new WheelEvent('wheel', {
-          bubbles: true, cancelable: true,
-          deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ,
-          deltaMode: e.deltaMode,
-          clientX: e.clientX, clientY: e.clientY,
-        }));
-      }
-      requestAnimationFrame(() => {
-        if (state.active) clickBlocker.style.pointerEvents = 'all';
-      });
-    }
     e.preventDefault();
     e.stopPropagation();
+    if (!isInLens(e.clientX, e.clientY)) return;
+    // Pass scroll through to the element under the cursor
+    clickBlockerEl.style.pointerEvents = 'none';
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    clickBlockerEl.style.pointerEvents = 'all';
+    if (target && !root.contains(target)) {
+      target.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true, cancelable: true,
+        deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ,
+        deltaMode: e.deltaMode,
+        clientX: e.clientX, clientY: e.clientY,
+      }));
+    }
   }
 
   function onBlockerContextMenu(e) {
@@ -249,126 +376,107 @@
     }
   }
 
-  function onWheel(e) {
-    if (!state.active) return;
-    if (!e.ctrlKey) return;
+  // ─── Resize via Ctrl+Scroll ───────────────────────────────────────────────────
+
+  function onCtrlWheel(e) {
+    if (!state.active || !e.ctrlKey) return;
     e.preventDefault();
-
-    const delta = e.deltaY > 0 ? -20 : 20;
-    state.lensW = Math.max(50, Math.min(state.lensW + delta, window.innerWidth));
-    state.lensH = Math.max(30, Math.min(state.lensH + (delta * 0.6), window.innerHeight));
-
+    const delta = e.deltaY > 0 ? -24 : 24;
+    state.lensW = Math.max(40,  Math.min(state.lensW + delta,          window.innerWidth));
+    state.lensH = Math.max(24,  Math.min(state.lensH + delta * .6,     window.innerHeight));
     // Re-center on cursor
-    state.pendingX = Math.max(0, Math.min(
-      e.clientX - state.lensW / 2, window.innerWidth - state.lensW
-    ));
-    state.pendingY = Math.max(0, Math.min(
-      e.clientY - state.lensH / 2, window.innerHeight - state.lensH
-    ));
-    state.lensX = state.pendingX;
-    state.lensY = state.pendingY;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    state.lensX = state.pendingX = Math.max(0, Math.min(e.clientX - state.lensW / 2, vw - state.lensW));
+    state.lensY = state.pendingY = Math.max(0, Math.min(e.clientY - state.lensH / 2, vh - state.lensH));
     applyGeometry();
     persistSettings();
   }
 
-  // Shift+Drag to draw a custom lens rectangle
+  // ─── Shift+Drag to draw custom rectangle ─────────────────────────────────────
+
   function onKeyDown(e) {
     if (e.key === 'Shift' && state.active) {
-      dragOverlay.style.pointerEvents = 'all';
+      dragOverlayEl.style.pointerEvents = 'all';
     }
+    if (e.key === 'x' && e.altKey) toggle();
   }
 
   function onKeyUp(e) {
     if (e.key === 'Shift') {
-      dragOverlay.style.pointerEvents = 'none';
+      dragOverlayEl.style.pointerEvents = 'none';
       state.dragging = false;
-    }
-    // Alt+X panic toggle
-    if (e.key === 'x' && e.altKey) {
-      toggle();
     }
   }
 
   function onDragMouseDown(e) {
     if (!e.shiftKey || !state.active) return;
-    state.dragging    = true;
-    state.dragStartX  = e.clientX;
-    state.dragStartY  = e.clientY;
-    state.lensX       = e.clientX;
-    state.lensY       = e.clientY;
-    state.lensW       = 1;
-    state.lensH       = 1;
+    state.dragging   = true;
+    state.dragStartX = e.clientX;
+    state.dragStartY = e.clientY;
+    state.lensX = state.pendingX = e.clientX;
+    state.lensY = state.pendingY = e.clientY;
+    state.lensW = 2;
+    state.lensH = 2;
     applyGeometry();
     e.preventDefault();
   }
 
   function onDragMouseMove(e) {
     if (!state.dragging) return;
-    const x1 = Math.min(e.clientX, state.dragStartX);
-    const y1 = Math.min(e.clientY, state.dragStartY);
-    const x2 = Math.max(e.clientX, state.dragStartX);
-    const y2 = Math.max(e.clientY, state.dragStartY);
-    state.lensX = x1;
-    state.lensY = y1;
-    state.lensW = Math.max(10, x2 - x1);
-    state.lensH = Math.max(10, y2 - y1);
+    state.lensX = state.pendingX = Math.min(e.clientX, state.dragStartX);
+    state.lensY = state.pendingY = Math.min(e.clientY, state.dragStartY);
+    state.lensW = Math.max(10, Math.abs(e.clientX - state.dragStartX));
+    state.lensH = Math.max(10, Math.abs(e.clientY - state.dragStartY));
     applyGeometry();
   }
 
-  function onDragMouseUp(e) {
+  function onDragMouseUp() {
     if (!state.dragging) return;
     state.dragging = false;
     state.locked   = true;
-    dragOverlay.style.pointerEvents = 'none';
+    dragOverlayEl.style.pointerEvents = 'none';
     persistSettings();
   }
 
-  // ─── Activation ───────────────────────────────────────────────────────────────
+  // ─── Activate / Deactivate ────────────────────────────────────────────────────
 
   function activate(settings = {}) {
-    if (state.active) return;
-    state.active     = true;
-    state.locked     = settings.locked      ?? false;
-    state.blurAmount = settings.blurAmount  ?? 20;
-    state.lensW      = settings.lensW       ?? 300;
-    state.lensH      = settings.lensH       ?? 200;
-
     if (!root) buildDOM();
 
-    root.style.display = 'block';
-    updateBlur();
+    state.active     = true;
+    state.blurAmount = settings.blurAmount ?? state.blurAmount;
+    state.lensW      = settings.lensW      ?? state.lensW;
+    state.lensH      = settings.lensH      ?? state.lensH;
+    state.locked     = settings.locked     ?? state.locked;
+    state.shape      = settings.shape      ?? state.shape;
+    state.effect     = settings.effect     ?? state.effect;
 
-    // Center lens in viewport initially
-    state.lensX = state.pendingX = (window.innerWidth  - state.lensW) / 2;
-    state.lensY = state.pendingY = (window.innerHeight - state.lensH) / 2;
+    // Ensure mask hole is the right SVG element for the shape
+    syncMaskHoleElement();
+    applyEffect(state.effect);
+
+    root.style.display = 'block';
+
+    // Center lens initially
+    state.lensX = state.pendingX = Math.max(0, (window.innerWidth  - state.lensW) / 2);
+    state.lensY = state.pendingY = Math.max(0, (window.innerHeight - state.lensH) / 2);
     applyGeometry();
 
-    document.addEventListener('mousemove',  onMouseMove,     true);
-    document.addEventListener('wheel',      onWheel,         { capture: true, passive: false });
-    document.addEventListener('keydown',    onKeyDown,       true);
-    document.addEventListener('keyup',      onKeyUp,         true);
-    dragOverlay.addEventListener('mousedown', onDragMouseDown, true);
-    document.addEventListener('mousemove',  onDragMouseMove, true);
-    document.addEventListener('mouseup',    onDragMouseUp,   true);
+    document.addEventListener('mousemove', onMouseMove,  true);
+    document.addEventListener('wheel',     onCtrlWheel,  { capture: true, passive: false });
+    document.addEventListener('keydown',   onKeyDown,    true);
+    document.addEventListener('keyup',     onKeyUp,      true);
   }
 
   function deactivate() {
-    if (!state.active) return;
     state.active = false;
-    if (state.animFrame) cancelAnimationFrame(state.animFrame);
-    state.animFrame = null;
-
+    if (state.animFrame) { cancelAnimationFrame(state.animFrame); state.animFrame = null; }
     if (root) root.style.display = 'none';
 
-    document.removeEventListener('mousemove',  onMouseMove,     true);
-    document.removeEventListener('wheel',      onWheel,         { capture: true });
-    document.removeEventListener('keydown',    onKeyDown,       true);
-    document.removeEventListener('keyup',      onKeyUp,         true);
-    if (dragOverlay) {
-      dragOverlay.removeEventListener('mousedown', onDragMouseDown, true);
-    }
-    document.removeEventListener('mousemove',  onDragMouseMove, true);
-    document.removeEventListener('mouseup',    onDragMouseUp,   true);
+    document.removeEventListener('mousemove', onMouseMove,  true);
+    document.removeEventListener('wheel',     onCtrlWheel,  { capture: true });
+    document.removeEventListener('keydown',   onKeyDown,    true);
+    document.removeEventListener('keyup',     onKeyUp,      true);
   }
 
   function toggle() {
@@ -377,92 +485,46 @@
     } else {
       loadSettings().then(s => activate(s));
     }
-    // Notify popup so its UI stays in sync
     chrome.runtime.sendMessage({ type: 'STATE_CHANGED', active: state.active }).catch(() => {});
   }
 
-  // ─── Blur Update ──────────────────────────────────────────────────────────────
+  // ─── Shape ────────────────────────────────────────────────────────────────────
 
-  function updateBlur() {
-    const filter = `blur(${state.blurAmount}px) saturate(180%)`;
-    [panelTop, panelLeft, panelRight, panelBottom].forEach(p => {
-      p.style.backdropFilter         = filter;
-      p.style.webkitBackdropFilter   = filter;
-    });
+  function syncMaskHoleElement() {
+    const wantTag = state.shape === 'circle' ? 'ellipse' : 'rect';
+    if (maskHoleEl.tagName.toLowerCase() === wantTag) return;
+
+    const newHole = document.createElementNS(SVG_NS, wantTag);
+    newHole.setAttribute('fill', 'black');
+    maskHoleEl.parentNode.replaceChild(newHole, maskHoleEl);
+    maskHoleEl = newHole;
   }
 
-  // ─── Persistence ──────────────────────────────────────────────────────────────
-
-  function getHostKey() {
-    return `site:${location.hostname}`;
-  }
-
-  function persistSettings() {
-    const s = {
-      lensW:       state.lensW,
-      lensH:       state.lensH,
-      blurAmount:  state.blurAmount,
-      locked:      state.locked,
-    };
-    chrome.storage.local.set({ [getHostKey()]: s, globalSettings: s }).catch(() => {});
-  }
-
-  async function loadSettings() {
-    return new Promise(resolve => {
-      chrome.storage.local.get([getHostKey(), 'globalSettings'], result => {
-        resolve(result[getHostKey()] || result.globalSettings || {});
-      });
-    });
-  }
-
-  // ─── Message Handling ─────────────────────────────────────────────────────────
-
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    switch (msg.type) {
-      case 'TOGGLE':
-        toggle();
-        sendResponse({ active: state.active });
-        break;
-
-      case 'ACTIVATE':
-        activate(msg.settings || {});
-        sendResponse({ active: true });
-        break;
-
-      case 'DEACTIVATE':
-        deactivate();
-        sendResponse({ active: false });
-        break;
-
-      case 'SET_BLUR':
-        state.blurAmount = msg.value;
-        if (state.active) updateBlur();
-        persistSettings();
-        sendResponse({});
-        break;
-
-      case 'SET_PRESET':
-        applyPreset(msg.preset);
-        sendResponse({ lensW: state.lensW, lensH: state.lensH });
-        break;
-
-      case 'SET_LOCK':
-        state.locked = msg.locked;
-        sendResponse({});
-        break;
-
-      case 'GET_STATE':
-        sendResponse({
-          active:      state.active,
-          lensW:       state.lensW,
-          lensH:       state.lensH,
-          blurAmount:  state.blurAmount,
-          locked:      state.locked,
-        });
-        break;
+  function setShape(shape) {
+    state.shape = shape;
+    if (state.active) {
+      syncMaskHoleElement();
+      applyGeometry();
     }
-    return true; // keep channel open for async
-  });
+    persistSettings();
+  }
+
+  // ─── Effects ──────────────────────────────────────────────────────────────────
+
+  function applyEffect(effect) {
+    state.effect = effect;
+    if (!borderEl) return;
+    borderEl.className = `__pl_border__ pl-${effect}`;
+    // Sparks only for fire
+    if (sparksEl) sparksEl.style.display = effect === 'fire' ? 'block' : 'none';
+  }
+
+  // ─── Blur ─────────────────────────────────────────────────────────────────────
+
+  function setBlur(amount) {
+    state.blurAmount = amount;
+    if (state.active) applyGeometry();
+  }
 
   // ─── Presets ──────────────────────────────────────────────────────────────────
 
@@ -486,13 +548,81 @@
     persistSettings();
   }
 
-  // ─── Auto-activate for remembered sites ──────────────────────────────────────
+  // ─── Persistence ──────────────────────────────────────────────────────────────
 
-  chrome.storage.local.get([getHostKey()], result => {
-    const siteData = result[getHostKey()];
-    if (siteData?.autoActivate) {
-      activate(siteData);
+  function siteKey() { return `site:${location.hostname}`; }
+
+  function persistSettings() {
+    const s = {
+      lensW: state.lensW, lensH: state.lensH,
+      blurAmount: state.blurAmount, locked: state.locked,
+      shape: state.shape, effect: state.effect,
+    };
+    chrome.storage.local.set({ [siteKey()]: s, globalSettings: s }).catch(() => {});
+  }
+
+  function loadSettings() {
+    return new Promise(resolve => {
+      chrome.storage.local.get([siteKey(), 'globalSettings'], res => {
+        resolve(res[siteKey()] || res.globalSettings || {});
+      });
+    });
+  }
+
+  // ─── Message Bus ──────────────────────────────────────────────────────────────
+
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    switch (msg.type) {
+      case 'TOGGLE':
+        toggle();
+        sendResponse({ active: state.active });
+        break;
+      case 'ACTIVATE':
+        activate(msg.settings || {});
+        sendResponse({ active: true });
+        break;
+      case 'DEACTIVATE':
+        deactivate();
+        sendResponse({ active: false });
+        break;
+      case 'SET_BLUR':
+        setBlur(msg.value);
+        persistSettings();
+        sendResponse({ ok: true });
+        break;
+      case 'SET_PRESET':
+        applyPreset(msg.preset);
+        sendResponse({ lensW: state.lensW, lensH: state.lensH });
+        break;
+      case 'SET_SHAPE':
+        setShape(msg.shape);
+        sendResponse({ ok: true });
+        break;
+      case 'SET_EFFECT':
+        applyEffect(msg.effect);
+        persistSettings();
+        sendResponse({ ok: true });
+        break;
+      case 'SET_LOCK':
+        state.locked = msg.locked;
+        sendResponse({ ok: true });
+        break;
+      case 'GET_STATE':
+        sendResponse({
+          active: state.active, lensW: state.lensW, lensH: state.lensH,
+          blurAmount: state.blurAmount, locked: state.locked,
+          shape: state.shape, effect: state.effect,
+        });
+        break;
     }
+    return true;
+  });
+
+  // ─── Auto-activate ────────────────────────────────────────────────────────────
+
+  chrome.storage.local.get([siteKey()], res => {
+    const s = res[siteKey()];
+    if (s?.autoActivate) activate(s);
   });
 
 })();
