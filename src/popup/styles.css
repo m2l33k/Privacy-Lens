@@ -1,0 +1,446 @@
+/* ─── Reset & Base ────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --black:      #1A1A1B;
+  --surface:    #232327;
+  --surface-2:  #2C2C32;
+  --border:     rgba(255,255,255,0.08);
+  --cyan:       #00D1FF;
+  --cyan-dim:   rgba(0, 209, 255, 0.18);
+  --cyan-glow:  rgba(0, 209, 255, 0.35);
+  --text:       #F2F2F2;
+  --text-muted: rgba(255,255,255,0.50);
+  --danger:     #FF4B6E;
+  --radius:     10px;
+  --radius-sm:  6px;
+}
+
+html {
+  font-size: 13px;
+}
+
+body {
+  width: 320px;
+  min-height: 400px;
+  background: var(--black);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.45;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #00D1FF22 0%, #00D1FF44 100%);
+  border: 1px solid var(--cyan-glow);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.header-text h1 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.header-text p {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  margin-top: 1px;
+}
+
+/* ─── Main Toggle ────────────────────────────────────────────────────────── */
+
+.toggle-section {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  margin: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+
+.toggle-section.active {
+  border-color: var(--cyan-glow);
+  background: rgba(0, 209, 255, 0.05);
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.toggle-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.toggle-section.active .toggle-status {
+  color: var(--cyan);
+}
+
+/* iOS-style toggle switch */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-2);
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  transition: background 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.switch input:checked ~ .switch-thumb {
+  transform: translateX(18px);
+}
+
+/* ─── Sections ───────────────────────────────────────────────────────────── */
+
+.section {
+  padding: 0 12px 10px;
+}
+
+.section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+
+/* ─── Presets ────────────────────────────────────────────────────────────── */
+
+.presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.preset-btn:hover {
+  border-color: rgba(0, 209, 255, 0.4);
+  background: var(--surface-2);
+}
+
+.preset-btn.active {
+  border-color: var(--cyan);
+  background: var(--cyan-dim);
+}
+
+.preset-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  position: relative;
+}
+
+.preset-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.preset-name {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.preset-btn.active .preset-name {
+  color: var(--cyan);
+}
+
+/* ─── Blur Slider ────────────────────────────────────────────────────────── */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.slider-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.slider-wrap {
+  flex: 1;
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+  transition: box-shadow 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 5px var(--cyan-dim);
+}
+
+.slider-value {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ─── Options ────────────────────────────────────────────────────────────── */
+
+.option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.option-row:last-child {
+  border-bottom: none;
+}
+
+.option-row:hover {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+
+.option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-label {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.option-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Compact switch for options */
+.switch-sm {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.switch-sm input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.switch-sm .switch-track {
+  border-radius: 10px;
+}
+
+.switch-sm input:checked + .switch-track {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.switch-sm .switch-thumb {
+  width: 14px;
+  height: 14px;
+  top: 2px;
+  left: 2px;
+}
+
+.switch-sm input:checked ~ .switch-thumb {
+  transform: translateX(14px);
+}
+
+/* ─── Hotkey Badge ───────────────────────────────────────────────────────── */
+
+.hotkey-section {
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hotkey-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.hotkey-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+
+.kbd-sep {
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ─── Divider ────────────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 12px 10px;
+}
+
+/* ─── Active Glow Effect ─────────────────────────────────────────────────── */
+
+.active-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--cyan); }
+  50%       { opacity: 0.6; box-shadow: 0 0 12px var(--cyan); }
+}
+
+.inactive-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.4;
+}
