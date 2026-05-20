@@ -156,14 +156,7 @@ export default function StatsApp() {
       {/* ── Header ── */}
       <div className="page-header">
         <div className="logo">
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="7" stroke="#00D1FF" strokeWidth="1.2"/>
-            <circle cx="8" cy="8" r="3.5" stroke="#00D1FF" strokeWidth="1"/>
-            <line x1="8" y1="1" x2="8" y2="3" stroke="#00D1FF" strokeWidth="1" strokeLinecap="round"/>
-            <line x1="8" y1="13" x2="8" y2="15" stroke="#00D1FF" strokeWidth="1" strokeLinecap="round"/>
-            <line x1="1" y1="8" x2="3" y2="8" stroke="#00D1FF" strokeWidth="1" strokeLinecap="round"/>
-            <line x1="13" y1="8" x2="15" y2="8" stroke="#00D1FF" strokeWidth="1" strokeLinecap="round"/>
-          </svg>
+          <img src={chrome.runtime.getURL('icons/icon48.png')} width="26" height="26" alt="Privacy Lens" style={{ objectFit: 'contain' }} />
         </div>
         <div>
           <h1 className="page-title">Privacy Lens</h1>
